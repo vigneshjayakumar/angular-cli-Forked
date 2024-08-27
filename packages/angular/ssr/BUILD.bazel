@@ -1,22 +1,29 @@
+load("@npm//@angular/build-tooling/bazel/api-golden:index.bzl", "api_golden_test_npm_package")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 load("//tools:defaults.bzl", "ng_package", "ts_library")
-load("@npm//@angular/build-tooling/bazel/api-golden:index.bzl", "api_golden_test_npm_package")
 
 package(default_visibility = ["//visibility:public"])
 
 ts_library(
     name = "ssr",
     package_name = "@angular/ssr",
-    srcs = glob([
-        "*.ts",
-        "src/**/*.ts",
-    ]),
+    srcs = glob(
+        include = [
+            "*.ts",
+            "src/**/*.ts",
+        ],
+        exclude = [
+            "**/*_spec.ts",
+        ],
+    ),
     module_name = "@angular/ssr",
     deps = [
+        "//packages/angular/ssr/third_party/critters:bundled_critters_lib",
+        "@npm//@angular/common",
         "@npm//@angular/core",
         "@npm//@angular/platform-server",
+        "@npm//@angular/router",
         "@npm//@types/node",
-        "@npm//critters",
     ],
 )
 
@@ -25,11 +32,19 @@ ng_package(
     package_name = "@angular/ssr",
     srcs = [
         ":package.json",
+        "//packages/angular/ssr/third_party/critters:bundled_critters_lib",
     ],
-    nested_packages = ["//packages/angular/ssr/schematics:npm_package"],
+    externals = [
+        "express",
+        "../../third_party/critters",
+    ],
+    nested_packages = [
+        "//packages/angular/ssr/schematics:npm_package",
+    ],
     tags = ["release-package"],
     deps = [
         ":ssr",
+        "//packages/angular/ssr/node",
     ],
 )
 

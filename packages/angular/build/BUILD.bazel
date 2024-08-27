@@ -55,7 +55,7 @@ ts_library(
     module_name = "@angular/build",
     module_root = "src/index.d.ts",
     deps = [
-        "//packages/angular/build/src/utils/routes-extractor",
+        "//packages/angular/ssr",
         "//packages/angular_devkit/architect",
         "@npm//@ampproject/remapping",
         "@npm//@angular/common",
@@ -79,6 +79,7 @@ ts_library(
         "@npm//browserslist",
         "@npm//critters",
         "@npm//esbuild",
+        "@npm//esbuild-wasm",
         "@npm//fast-glob",
         "@npm//https-proxy-agent",
         "@npm//listr2",

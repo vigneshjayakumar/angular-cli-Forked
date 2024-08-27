@@ -6,8 +6,7 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import Critters from 'critters';
-import { readFile } from 'node:fs/promises';
+import Critters from '../../third_party/critters';
 
 /**
  * Pattern used to extract the media query set by Critters in an `onload` handler.
@@ -20,51 +19,46 @@ const MEDIA_SET_HANDLER_PATTERN = /^this\.media=["'](.*)["'];?$/;
 const CSP_MEDIA_ATTR = 'ngCspMedia';
 
 /**
- * Script text used to change the media value of the link tags.
+ * Script that dynamically updates the `media` attribute of `<link>` tags based on a custom attribute (`CSP_MEDIA_ATTR`).
  *
  * NOTE:
  * We do not use `document.querySelectorAll('link').forEach((s) => s.addEventListener('load', ...)`
- * because this does not always fire on Chome.
+ * because load events are not always triggered reliably on Chrome.
  * See: https://github.com/angular/angular-cli/issues/26932 and https://crbug.com/1521256
+ *
+ * The script:
+ * - Ensures the event target is a `<link>` tag with the `CSP_MEDIA_ATTR` attribute.
+ * - Updates the `media` attribute with the value of `CSP_MEDIA_ATTR` and then removes the attribute.
+ * - Removes the event listener when all relevant `<link>` tags have been processed.
+ * - Uses event capturing (the `true` parameter) since load events do not bubble up the DOM.
  */
-const LINK_LOAD_SCRIPT_CONTENT = [
-  '(() => {',
-  `  const CSP_MEDIA_ATTR = '${CSP_MEDIA_ATTR}';`,
-  '  const documentElement = document.documentElement;',
-  '  const listener = (e) => {',
-  '    const target = e.target;',
-  `    if (!target || target.tagName !== 'LINK' || !target.hasAttribute(CSP_MEDIA_ATTR)) {`,
-  '     return;',
-  '    }',
+const LINK_LOAD_SCRIPT_CONTENT = `
+(() => {
+  const CSP_MEDIA_ATTR = '${CSP_MEDIA_ATTR}';
+  const documentElement = document.documentElement;
 
-  '    target.media = target.getAttribute(CSP_MEDIA_ATTR);',
-  '    target.removeAttribute(CSP_MEDIA_ATTR);',
+  // Listener for load events on link tags.
+  const listener = (e) => {
+    const target = e.target;
+    if (
+      !target ||
+      target.tagName !== 'LINK' ||
+      !target.hasAttribute(CSP_MEDIA_ATTR)
+    ) {
+      return;
+    }
 
-  // Remove onload listener when there are no longer styles that need to be loaded.
-  '    if (!document.head.querySelector(`link[${CSP_MEDIA_ATTR}]`)) {',
-  `      documentElement.removeEventListener('load', listener);`,
-  '    }',
-  '  };',
+    target.media = target.getAttribute(CSP_MEDIA_ATTR);
+    target.removeAttribute(CSP_MEDIA_ATTR);
 
-  //  We use an event with capturing (the true parameter) because load events don't bubble.
-  `  documentElement.addEventListener('load', listener, true);`,
-  '})();',
-].join('\n');
+    if (!document.head.querySelector(\`link[\${CSP_MEDIA_ATTR}]\`)) {
+      documentElement.removeEventListener('load', listener);
+    }
+  };
 
-export interface InlineCriticalCssProcessOptions {
-  outputPath?: string;
-}
-
-export interface InlineCriticalCssProcessorOptions {
-  minify?: boolean;
-  deployUrl?: string;
-}
-
-export interface InlineCriticalCssResult {
-  content: string;
-  warnings?: string[];
-  errors?: string[];
-}
+  documentElement.addEventListener('load', listener, true);
+})();
+`.trim();
 
 /** Partial representation of an `HTMLElement`. */
 interface PartialHTMLElement {
@@ -90,68 +84,55 @@ interface PartialDocument {
   querySelector(selector: string): PartialHTMLElement | null;
 }
 
-/** Signature of the `Critters.embedLinkedStylesheet` method. */
-type EmbedLinkedStylesheetFn = (
-  link: PartialHTMLElement,
-  document: PartialDocument,
-) => Promise<unknown>;
+/* eslint-disable @typescript-eslint/no-unsafe-declaration-merging */
 
-class CrittersExtended extends Critters {
-  readonly warnings: string[] = [];
-  readonly errors: string[] = [];
-  private initialEmbedLinkedStylesheet: EmbedLinkedStylesheetFn;
+// We use Typescript declaration merging because `embedLinkedStylesheet` it's not declared in
+// the `Critters` types which means that we can't call the `super` implementation.
+interface CrittersBase {
+  embedLinkedStylesheet(link: PartialHTMLElement, document: PartialDocument): Promise<unknown>;
+}
+class CrittersBase extends Critters {}
+/* eslint-enable @typescript-eslint/no-unsafe-declaration-merging */
+
+export class InlineCriticalCssProcessor extends CrittersBase {
   private addedCspScriptsDocuments = new WeakSet<PartialDocument>();
   private documentNonces = new WeakMap<PartialDocument, string | null>();
 
-  // Inherited from `Critters`, but not exposed in the typings.
-  protected declare embedLinkedStylesheet: EmbedLinkedStylesheetFn;
-
   constructor(
-    readonly optionsExtended: InlineCriticalCssProcessorOptions & InlineCriticalCssProcessOptions,
-    private readonly resourceCache: Map<string, string>,
+    public override readFile: (path: string) => Promise<string>,
+    readonly outputPath?: string,
   ) {
     super({
       logger: {
-        warn: (s: string) => this.warnings.push(s),
-        error: (s: string) => this.errors.push(s),
+        // eslint-disable-next-line no-console
+        warn: (s: string) => console.warn(s),
+        // eslint-disable-next-line no-console
+        error: (s: string) => console.error(s),
         info: () => {},
       },
       logLevel: 'warn',
-      path: optionsExtended.outputPath,
-      publicPath: optionsExtended.deployUrl,
-      compress: !!optionsExtended.minify,
+      path: outputPath,
+      publicPath: undefined,
+      compress: false,
       pruneSource: false,
       reduceInlineStyles: false,
       mergeStylesheets: false,
       // Note: if `preload` changes to anything other than `media`, the logic in
-      // `embedLinkedStylesheetOverride` will have to be updated.
+      // `embedLinkedStylesheet` will have to be updated.
       preload: 'media',
       noscriptFallback: true,
       inlineFonts: true,
     });
-
-    // We can't use inheritance to override `embedLinkedStylesheet`, because it's not declared in
-    // the `Critters` .d.ts which means that we can't call the `super` implementation. TS doesn't
-    // allow for `super` to be cast to a different type.
-    this.initialEmbedLinkedStylesheet = this.embedLinkedStylesheet;
-    this.embedLinkedStylesheet = this.embedLinkedStylesheetOverride;
-  }
-
-  public override async readFile(path: string): Promise<string> {
-    let resourceContent = this.resourceCache.get(path);
-    if (resourceContent === undefined) {
-      resourceContent = await readFile(path, 'utf-8');
-      this.resourceCache.set(path, resourceContent);
-    }
-
-    return resourceContent;
   }
 
   /**
    * Override of the Critters `embedLinkedStylesheet` method
    * that makes it work with Angular's CSP APIs.
    */
-  private embedLinkedStylesheetOverride: EmbedLinkedStylesheetFn = async (link, document) => {
+  override async embedLinkedStylesheet(
+    link: PartialHTMLElement,
+    document: PartialDocument,
+  ): Promise<unknown> {
     if (link.getAttribute('media') === 'print' && link.next?.name === 'noscript') {
       // Workaround for https://github.com/GoogleChromeLabs/critters/issues/64
       // NB: this is only needed for the webpack based builders.
@@ -163,7 +144,7 @@ class CrittersExtended extends Critters {
       }
     }
 
-    const returnValue = await this.initialEmbedLinkedStylesheet(link, document);
+    const returnValue = await super.embedLinkedStylesheet(link, document);
     const cspNonce = this.findCspNonce(document);
 
     if (cspNonce) {
@@ -191,7 +172,7 @@ class CrittersExtended extends Critters {
     }
 
     return returnValue;
-  };
+  }
 
   /**
    * Finds the CSP nonce for a specific document.
@@ -239,25 +220,5 @@ class CrittersExtended extends Critters {
     // run as early as possible, before the `link` tags.
     document.head.insertBefore(script, link);
     this.addedCspScriptsDocuments.add(document);
-  }
-}
-
-export class InlineCriticalCssProcessor {
-  private readonly resourceCache = new Map<string, string>();
-
-  constructor(protected readonly options: InlineCriticalCssProcessorOptions) {}
-
-  async process(
-    html: string,
-    options: InlineCriticalCssProcessOptions,
-  ): Promise<InlineCriticalCssResult> {
-    const critters = new CrittersExtended({ ...this.options, ...options }, this.resourceCache);
-    const content = await critters.process(html);
-
-    return {
-      content,
-      errors: critters.errors.length ? critters.errors : undefined,
-      warnings: critters.warnings.length ? critters.warnings : undefined,
-    };
   }
 }

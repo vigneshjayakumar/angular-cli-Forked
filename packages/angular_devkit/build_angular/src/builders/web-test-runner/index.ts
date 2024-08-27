@@ -6,10 +6,11 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import { buildApplicationInternal } from '@angular/build/private';
+import { Result, ResultKind, buildApplicationInternal } from '@angular/build/private';
 import { BuilderContext, BuilderOutput, createBuilder } from '@angular-devkit/architect';
 import type * as WebTestRunner from '@web/test-runner';
-import { promises as fs } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { findTestFiles } from '../../utils/test-files';
@@ -17,6 +18,7 @@ import { OutputHashing } from '../browser-esbuild/schema';
 import { logBuilderStatusWarnings } from './builder-status-warnings';
 import { WtrBuilderOptions, normalizeOptions } from './options';
 import { Schema } from './schema';
+import { writeTestFiles } from './write-test-files';
 
 export default createBuilder(
   async (schema: Schema, ctx: BuilderContext): Promise<BuilderOutput> => {
@@ -41,7 +43,8 @@ export default createBuilder(
     }
 
     const options = normalizeOptions(schema);
-    const testDir = 'dist/test-out';
+
+    const testDir = path.join(ctx.workspaceRoot, 'dist/test-out', randomUUID());
 
     // Parallelize startup work.
     const [testFiles] = await Promise.all([
@@ -53,12 +56,20 @@ export default createBuilder(
 
     // Build the tests and abort on any build failure.
     const buildOutput = await buildTests(testFiles, testDir, options, ctx);
-    if (!buildOutput.success) {
-      return buildOutput;
+    if (buildOutput.kind === ResultKind.Failure) {
+      return { success: false };
+    } else if (buildOutput.kind !== ResultKind.Full) {
+      return {
+        success: false,
+        error: 'A full build result is required from the application builder.',
+      };
     }
 
+    // Write test files
+    await writeTestFiles(buildOutput.files, testDir);
+
     // Run the built tests.
-    return await runTests(wtr, `${testDir}/browser`, options);
+    return await runTests(wtr, testDir, options);
   },
 );
 
@@ -68,7 +79,7 @@ async function buildTests(
   outputPath: string,
   options: WtrBuilderOptions,
   ctx: BuilderContext,
-): Promise<BuilderOutput> {
+): Promise<Result> {
   const entryPoints = new Set([
     ...testFiles,
     'jasmine-core/lib/jasmine-core/jasmine.js',

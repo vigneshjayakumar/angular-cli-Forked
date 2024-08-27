@@ -6,14 +6,12 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import type { ApplicationBuilderOptions, BuildOutputAsset, BuildOutputFile } from '@angular/build';
-import { buildApplicationInternal, deleteOutputDir, emitFilesToDisk } from '@angular/build/private';
+import { type ApplicationBuilderOptions, buildApplication } from '@angular/build';
 import { BuilderContext, BuilderOutput, createBuilder } from '@angular-devkit/architect';
 import type { Plugin } from 'esbuild';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { logBuilderStatusWarnings } from './builder-status-warnings';
 import type { Schema as BrowserBuilderOptions } from './schema';
+
+export type { BrowserBuilderOptions };
 
 type OutputPathClass = Exclude<ApplicationBuilderOptions['outputPath'], string | undefined>;
 
@@ -31,49 +29,30 @@ export async function* buildEsbuildBrowser(
     write?: boolean;
   },
   plugins?: Plugin[],
-): AsyncIterable<
-  BuilderOutput & {
-    outputFiles?: BuildOutputFile[];
-    assetFiles?: { source: string; destination: string }[];
+): AsyncIterable<BuilderOutput> {
+  // Warn about any unsupported options
+  if (userOptions['vendorChunk']) {
+    context.logger.warn(
+      `The 'vendorChunk' option is not used by this builder and will be ignored.`,
+    );
   }
-> {
-  // Inform user of status of builder and options
-  logBuilderStatusWarnings(userOptions, context);
-  const normalizedOptions = normalizeOptions(userOptions);
-  const { deleteOutputPath, outputPath } = normalizedOptions;
-  const fullOutputPath = path.join(context.workspaceRoot, outputPath.base);
-
-  if (deleteOutputPath && infrastructureSettings?.write !== false) {
-    await deleteOutputDir(context.workspaceRoot, outputPath.base);
+  if (userOptions['commonChunk'] === false) {
+    context.logger.warn(
+      `The 'commonChunk' option is always enabled by this builder and will be ignored.`,
+    );
+  }
+  if (userOptions['webWorkerTsConfig']) {
+    context.logger.warn(`The 'webWorkerTsConfig' option is not yet supported by this builder.`);
   }
 
-  for await (const result of buildApplicationInternal(
-    normalizedOptions,
-    context,
-    {
-      write: false,
-    },
-    plugins && { codePlugins: plugins },
-  )) {
-    if (infrastructureSettings?.write !== false && result.outputFiles) {
-      // Write output files
-      await writeResultFiles(result.outputFiles, result.assetFiles, fullOutputPath);
-    }
+  // Convert browser builder options to application builder options
+  const normalizedOptions = convertBrowserOptions(userOptions);
 
-    // The builder system (architect) currently attempts to treat all results as JSON and
-    // attempts to validate the object with a JSON schema validator. This can lead to slow
-    // build completion (even after the actual build is fully complete) or crashes if the
-    // size and/or quantity of output files is large. Architect only requires a `success`
-    // property so that is all that will be passed here if the infrastructure settings have
-    // not been explicitly set to avoid writes. Writing is only disabled when used directly
-    // by the dev server which bypasses the architect behavior.
-    const builderResult =
-      infrastructureSettings?.write === false ? result : { success: result.success };
-    yield builderResult;
-  }
+  // Execute the application builder
+  yield* buildApplication(normalizedOptions, context, { codePlugins: plugins });
 }
 
-function normalizeOptions(
+export function convertBrowserOptions(
   options: BrowserBuilderOptions,
 ): Omit<ApplicationBuilderOptions, 'outputPath'> & { outputPath: OutputPathClass } {
   const {
@@ -82,6 +61,7 @@ function normalizeOptions(
     ngswConfigPath,
     serviceWorker,
     polyfills,
+    resourcesOutputPath,
     ...otherOptions
   } = options;
 
@@ -92,47 +72,11 @@ function normalizeOptions(
     outputPath: {
       base: outputPath,
       browser: '',
+      server: '',
+      media: resourcesOutputPath ?? 'media',
     },
     ...otherOptions,
   };
 }
 
-// We write the file directly from this builder to maintain webpack output compatibility
-// and not output browser files into '/browser'.
-async function writeResultFiles(
-  outputFiles: BuildOutputFile[],
-  assetFiles: BuildOutputAsset[] | undefined,
-  outputPath: string,
-) {
-  const directoryExists = new Set<string>();
-  const ensureDirectoryExists = async (basePath: string) => {
-    if (basePath && !directoryExists.has(basePath)) {
-      await fs.mkdir(path.join(outputPath, basePath), { recursive: true });
-      directoryExists.add(basePath);
-    }
-  };
-
-  // Writes the output file to disk and ensures the containing directories are present
-  await emitFilesToDisk(outputFiles, async (file: BuildOutputFile) => {
-    // Ensure output subdirectories exist
-    const basePath = path.dirname(file.path);
-    await ensureDirectoryExists(basePath);
-
-    // Write file contents
-    await fs.writeFile(path.join(outputPath, file.path), file.contents);
-  });
-
-  if (assetFiles?.length) {
-    await emitFilesToDisk(assetFiles, async ({ source, destination }) => {
-      const basePath = path.dirname(destination);
-
-      // Ensure output subdirectories exist
-      await ensureDirectoryExists(basePath);
-
-      // Copy file contents
-      await fs.copyFile(source, path.join(outputPath, destination), fs.constants.COPYFILE_FICLONE);
-    });
-  }
-}
-
-export default createBuilder(buildEsbuildBrowser);
+export default createBuilder<BrowserBuilderOptions>(buildEsbuildBrowser);

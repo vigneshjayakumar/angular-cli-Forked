@@ -1,20 +1,172 @@
-<a name="18.2.0-next.1"></a>
+<a name="19.0.0-next.1"></a>
 
-# 18.2.0-next.1 (2024-07-17)
+# 19.0.0-next.1 (2024-08-22)
+
+## Breaking Changes
 
 ### @angular-devkit/build-angular
 
-| Commit                                                                                              | Type | Description                                       |
-| --------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------- |
-| [9baae6e22](https://github.com/angular/angular-cli/commit/9baae6e22c5ad89e2f05b55b46a91ef0fbbe79a2) | fix  | skip undefined files when generating budget stats |
+- The `browserTarget` option has been removed from the DevServer and ExtractI18n builders. `buildTarget` is to be used instead.
+
+### @angular-devkit/core
+
+- The deprecated `fileBuffer` function is no longer available. Update your code to use `stringToFileBuffer` instead to maintain compatibility.
+
+  **Note:** that this change does not affect application developers.
 
 ### @angular/build
 
-| Commit                                                                                              | Type | Description                                                   |
-| --------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------- |
-| [24aaf1e37](https://github.com/angular/angular-cli/commit/24aaf1e37f49735ce97fe72fced3d53b51d6b631) | feat | support import attribute based loader configuration           |
-| [394f9ce35](https://github.com/angular/angular-cli/commit/394f9ce35f876e7f82c6817d9424b32ec1eaa4a2) | fix  | remove Vite "/@id/" prefix for explicit external dependencies |
-| [855a4b841](https://github.com/angular/angular-cli/commit/855a4b84121ab16594bcd1785d648eccefa4baa3) | fix  | resolve only ".wasm" files                                    |
+- The `@angular/localize/init` polyfill will no longer be added automatically to projects. To prevent runtime issues, ensure that this polyfill is manually included in the "polyfills" section of your "angular.json" file if your application relies on Angular localization features.
+
+### @schematics/angular
+
+| Commit                                                                                              | Type | Description                                                |
+| --------------------------------------------------------------------------------------------------- | ---- | ---------------------------------------------------------- |
+| [7992218a9](https://github.com/angular/angular-cli/commit/7992218a9c22ea9469bd3386c7dc1d5efc6e51f9) | fix  | remove `declaration` and `sourceMap` from default tsconfig |
+
+### @angular-devkit/build-angular
+
+| Commit                                                                                              | Type     | Description                                    |
+| --------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------- |
+| [0b161bc76](https://github.com/angular/angular-cli/commit/0b161bc7616bef9a8f1f9113a50b07291635159d) | fix      | remove outdated browser-esbuild option warning |
+| [e40384e63](https://github.com/angular/angular-cli/commit/e40384e637bc6f92c28f4e572f986ca902938ba2) | refactor | remove deprecated `browserTarget`              |
+
+### @angular-devkit/core
+
+| Commit                                                                                              | Type     | Description                                                              |
+| --------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------ |
+| [0d8a1006d](https://github.com/angular/angular-cli/commit/0d8a1006d4629d8af1144065ea237ab30916e66e) | refactor | remove deprecated `fileBuffer` function in favor of `stringToFileBuffer` |
+
+### @angular/build
+
+| Commit                                                                                              | Type     | Description                                                                         |
+| --------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------- |
+| [71c06c69f](https://github.com/angular/angular-cli/commit/71c06c69f6f472e5ea86f2e5adbd5062a8cc5f2a) | fix      | improve error message when an unhandled exception occurs during prerendering        |
+| [6b544f70e](https://github.com/angular/angular-cli/commit/6b544f70e706b9e13564d4ddbb0f0cb352942b2c) | fix      | support reading on-disk files during i18n extraction                                |
+| [d6a34034d](https://github.com/angular/angular-cli/commit/d6a34034d7489c09753090642ade4c606cd98ece) | refactor | remove automatic addition of `@angular/localize/init` polyfill and related warnings |
+
+### @angular/ssr
+
+| Commit                                                                                              | Type | Description                                                |
+| --------------------------------------------------------------------------------------------------- | ---- | ---------------------------------------------------------- |
+| [9692a9054](https://github.com/angular/angular-cli/commit/9692a9054c3cdbf151df01279c2d268332b1a032) | feat | improve handling of aborted requests in `AngularServerApp` |
+
+<!-- CHANGELOG SPLIT MARKER -->
+
+<a name="18.2.1"></a>
+
+# 18.2.1 (2024-08-21)
+
+### @angular/cli
+
+| Commit                                                                                              | Type | Description                                                     |
+| --------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------------------- |
+| [05a274a01](https://github.com/angular/angular-cli/commit/05a274a01365c21f69c0412f3455acd14cc6ddc5) | fix  | prevent bypassing select/checkbox prompts on validation failure |
+
+### @angular-devkit/schematics-cli
+
+| Commit                                                                                              | Type | Description                                                     |
+| --------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------------------- |
+| [94e27c88b](https://github.com/angular/angular-cli/commit/94e27c88bb968589bc8b9b5d6536ce6c0ba0b24f) | fix  | prevent bypassing select/checkbox prompts on validation failure |
+
+### @angular-devkit/build-angular
+
+| Commit                                                                                              | Type | Description                                    |
+| --------------------------------------------------------------------------------------------------- | ---- | ---------------------------------------------- |
+| [ddeb2b2b9](https://github.com/angular/angular-cli/commit/ddeb2b2b93eaa9d8b659d17357aa2b7a9dc509ce) | fix  | remove outdated browser-esbuild option warning |
+
+### @angular/build
+
+| Commit                                                                                              | Type | Description                                                                  |
+| --------------------------------------------------------------------------------------------------- | ---- | ---------------------------------------------------------------------------- |
+| [83b2699ab](https://github.com/angular/angular-cli/commit/83b2699abbf58a7c90d2339fa4a01d67aa2d2d33) | fix  | improve error message when an unhandled exception occurs during prerendering |
+| [0be4038a5](https://github.com/angular/angular-cli/commit/0be4038a503626e2e9f44d68fe5599cc6028dd8e) | fix  | support reading on-disk files during i18n extraction                         |
+
+<!-- CHANGELOG SPLIT MARKER -->
+
+<a name="19.0.0-next.0"></a>
+
+# 19.0.0-next.0 (2024-08-14)
+
+### @angular/cli
+
+| Commit                                                                                              | Type | Description                                                     |
+| --------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------------------- |
+| [c5ed0b124](https://github.com/angular/angular-cli/commit/c5ed0b1248dc2d5f895f4c4dc6737269a4854a1e) | fix  | prevent bypassing select/checkbox prompts on validation failure |
+
+### @angular-devkit/schematics-cli
+
+| Commit                                                                                              | Type | Description                                                     |
+| --------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------------------- |
+| [37693c40e](https://github.com/angular/angular-cli/commit/37693c40e3afc4c6dd7c949ea658bdf94146c9d8) | feat | add package manager option to blank schematic                   |
+| [73c243796](https://github.com/angular/angular-cli/commit/73c24379651695d8bb82602ab613e568f1233c2c) | fix  | prevent bypassing select/checkbox prompts on validation failure |
+
+### @angular/ssr
+
+| Commit                                                                                              | Type | Description                                   |
+| --------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------- |
+| [bca568389](https://github.com/angular/angular-cli/commit/bca56838937f942c5ef902f5c98d018582188e84) | feat | dynamic route resolution using Angular router |
+| [3c9697a8c](https://github.com/angular/angular-cli/commit/3c9697a8c34a5e0f3470bde73f11f9f32107f42e) | feat | introduce new hybrid rendering API            |
+
+<!-- CHANGELOG SPLIT MARKER -->
+
+<a name="18.2.0"></a>
+
+# 18.2.0 (2024-08-14)
+
+### @schematics/angular
+
+| Commit                                                                                              | Type | Description                              |
+| --------------------------------------------------------------------------------------------------- | ---- | ---------------------------------------- |
+| [4da922e4f](https://github.com/angular/angular-cli/commit/4da922e4f4e905a1274e70adca1d875c025b8b46) | feat | use isolatedModules in generated project |
+
+### @angular/build
+
+| Commit                                                                                              | Type | Description                                         |
+| --------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------- |
+| [24aaf1e37](https://github.com/angular/angular-cli/commit/24aaf1e37f49735ce97fe72fced3d53b51d6b631) | feat | support import attribute based loader configuration |
+
+<!-- CHANGELOG SPLIT MARKER -->
+
+<a name="18.1.4"></a>
+
+# 18.1.4 (2024-08-07)
+
+### @angular/build
+
+| Commit                                                                                              | Type | Description                                            |
+| --------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------ |
+| [f8b092711](https://github.com/angular/angular-cli/commit/f8b092711481a5754ea93bce65d706d261873810) | fix  | allow explicitly disabling TypeScript incremental mode |
+| [f3a5970fc](https://github.com/angular/angular-cli/commit/f3a5970fca0a196b1ac905306257d65bab3b1325) | fix  | lazy load Node.js inspector for dev server             |
+
+<!-- CHANGELOG SPLIT MARKER -->
+
+<a name="18.1.3"></a>
+
+# 18.1.3 (2024-07-31)
+
+### @angular/build
+
+| Commit                                                                                              | Type | Description                                                                   |
+| --------------------------------------------------------------------------------------------------- | ---- | ----------------------------------------------------------------------------- |
+| [a28615d7d](https://github.com/angular/angular-cli/commit/a28615d7dd3f6503f257756058fe182ce6f6b052) | fix  | add CSP `nonce` attribute to script tags when inline critical CSS is disabled |
+| [747a1447c](https://github.com/angular/angular-cli/commit/747a1447c1855a1bb918e5f55e4ba4182235f88a) | fix  | prevent build failures with remote CSS imports when Tailwind is configured    |
+| [c0933f2c0](https://github.com/angular/angular-cli/commit/c0933f2c0354a13ba3f752f29b24054177697faa) | fix  | resolve error with `extract-i18n` builder for libraries                       |
+
+<!-- CHANGELOG SPLIT MARKER -->
+
+<a name="18.1.2"></a>
+
+# 18.1.2 (2024-07-24)
+
+### @angular/build
+
+| Commit                                                                                              | Type | Description                                         |
+| --------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------- |
+| [5b9378a3b](https://github.com/angular/angular-cli/commit/5b9378a3be3a1c4f465ba471a120a2edd3a4d2f8) | fix  | account for HTML base HREF for dev-server externals |
+| [3e4ea77d7](https://github.com/angular/angular-cli/commit/3e4ea77d755edce2c88d55b76860e6e91fb03f3c) | fix  | correctly detect comma in Sass URL lexer            |
+| [d868270f1](https://github.com/angular/angular-cli/commit/d868270f1baf0fd5f2c5677691cc9c4e88b47d8f) | fix  | prevent redirection loop                            |
+| [3573ac655](https://github.com/angular/angular-cli/commit/3573ac6555ead2afc34979e284426a0204fff42c) | fix  | serve HTML files directly                           |
 
 <!-- CHANGELOG SPLIT MARKER -->
 
@@ -34,18 +186,6 @@
 | --------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------- |
 | [96dc7e6ed](https://github.com/angular/angular-cli/commit/96dc7e6ed3317e354fae82d1b42b31250e96d89d) | fix  | remove Vite "/@id/" prefix for explicit external dependencies |
 | [bdef39801](https://github.com/angular/angular-cli/commit/bdef3980160db8c27ae103444a41275351434b78) | fix  | resolve only ".wasm" files                                    |
-
-<!-- CHANGELOG SPLIT MARKER -->
-
-<a name="18.2.0-next.0"></a>
-
-# 18.2.0-next.0 (2024-07-10)
-
-### @schematics/angular
-
-| Commit                                                                                              | Type | Description                              |
-| --------------------------------------------------------------------------------------------------- | ---- | ---------------------------------------- |
-| [4da922e4f](https://github.com/angular/angular-cli/commit/4da922e4f4e905a1274e70adca1d875c025b8b46) | feat | use isolatedModules in generated project |
 
 <!-- CHANGELOG SPLIT MARKER -->
 

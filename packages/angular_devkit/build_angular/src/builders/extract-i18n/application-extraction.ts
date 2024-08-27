@@ -6,16 +6,14 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {
-  type ApplicationBuilderInternalOptions,
-  buildApplicationInternal,
-} from '@angular/build/private';
+import type { ApplicationBuilderOptions } from '@angular/build';
+import { ResultFile, ResultKind, buildApplicationInternal } from '@angular/build/private';
 import type { ɵParsedMessage as LocalizeMessage } from '@angular/localize';
 import type { MessageExtractor } from '@angular/localize/tools';
-import type { BuilderContext, BuilderOutput } from '@angular-devkit/architect';
-import assert from 'node:assert';
+import type { BuilderContext } from '@angular-devkit/architect';
+import { readFileSync } from 'node:fs';
 import nodePath from 'node:path';
-import { buildEsbuildBrowser } from '../browser-esbuild';
+import { BrowserBuilderOptions, convertBrowserOptions } from '../browser-esbuild';
 import type { NormalizedExtractI18nOptions } from './options';
 
 export async function extractMessages(
@@ -24,7 +22,7 @@ export async function extractMessages(
   context: BuilderContext,
   extractorConstructor: typeof MessageExtractor,
 ): Promise<{
-  builderResult: BuilderOutput;
+  success: boolean;
   basePath: string;
   messages: LocalizeMessage[];
   useLegacyIds: boolean;
@@ -32,63 +30,45 @@ export async function extractMessages(
   const messages: LocalizeMessage[] = [];
 
   // Setup the build options for the application based on the buildTarget option
-  const buildOptions = (await context.validateOptions(
-    await context.getTargetOptions(options.buildTarget),
-    builderName,
-  )) as unknown as ApplicationBuilderInternalOptions;
+  let buildOptions;
+  if (builderName === '@angular-devkit/build-angular:application') {
+    buildOptions = (await context.validateOptions(
+      await context.getTargetOptions(options.buildTarget),
+      builderName,
+    )) as unknown as ApplicationBuilderOptions;
+  } else {
+    buildOptions = convertBrowserOptions(
+      (await context.validateOptions(
+        await context.getTargetOptions(options.buildTarget),
+        builderName,
+      )) as unknown as BrowserBuilderOptions,
+    );
+  }
+
   buildOptions.optimization = false;
   buildOptions.sourceMap = { scripts: true, vendor: true, styles: false };
   buildOptions.localize = false;
   buildOptions.budgets = undefined;
   buildOptions.index = false;
   buildOptions.serviceWorker = false;
+  buildOptions.ssr = false;
+  buildOptions.appShell = false;
+  buildOptions.prerender = false;
 
-  let build;
-  if (builderName === '@angular-devkit/build-angular:application') {
-    build = buildApplicationInternal;
+  const builderResult = await first(buildApplicationInternal(buildOptions, context));
 
-    buildOptions.ssr = false;
-    buildOptions.appShell = false;
-    buildOptions.prerender = false;
+  let success = false;
+  if (!builderResult || builderResult.kind === ResultKind.Failure) {
+    context.logger.error('Application build failed.');
+  } else if (builderResult.kind !== ResultKind.Full) {
+    context.logger.error('Application build did not provide a full output.');
   } else {
-    build = buildEsbuildBrowser;
-  }
-
-  // Build the application with the build options
-  let builderResult;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for await (const result of build(buildOptions as any, context, { write: false })) {
-      builderResult = result;
-      break;
-    }
-
-    assert(builderResult !== undefined, 'Application builder did not provide a result.');
-  } catch (err) {
-    builderResult = {
-      success: false,
-      error: (err as Error).message,
-    };
-  }
-
-  // Extract messages from each output JavaScript file.
-  // Output files are only present on a successful build.
-  if (builderResult.outputFiles) {
-    // Store the JS and JS map files for lookup during extraction
-    const files = new Map<string, string>();
-    for (const outputFile of builderResult.outputFiles) {
-      if (outputFile.path.endsWith('.js')) {
-        files.set(outputFile.path, outputFile.text);
-      } else if (outputFile.path.endsWith('.js.map')) {
-        files.set(outputFile.path, outputFile.text);
-      }
-    }
-
     // Setup the localize message extractor based on the in-memory files
-    const extractor = setupLocalizeExtractor(extractorConstructor, files, context);
+    const extractor = setupLocalizeExtractor(extractorConstructor, builderResult.files, context);
 
-    // Attempt extraction of all output JS files
-    for (const filePath of files.keys()) {
+    // Extract messages from each output JavaScript file.
+    // Output files are only present on a successful build.
+    for (const filePath of Object.keys(builderResult.files)) {
       if (!filePath.endsWith('.js')) {
         continue;
       }
@@ -96,10 +76,12 @@ export async function extractMessages(
       const fileMessages = extractor.extractMessages(filePath);
       messages.push(...fileMessages);
     }
+
+    success = true;
   }
 
   return {
-    builderResult,
+    success,
     basePath: context.workspaceRoot,
     messages,
     // Legacy i18n identifiers are not supported with the new application builder
@@ -109,9 +91,10 @@ export async function extractMessages(
 
 function setupLocalizeExtractor(
   extractorConstructor: typeof MessageExtractor,
-  files: Map<string, string>,
+  files: Record<string, ResultFile>,
   context: BuilderContext,
 ): MessageExtractor {
+  const textDecoder = new TextDecoder();
   // Setup a virtual file system instance for the extractor
   // * MessageExtractor itself uses readFile, relative and resolve
   // * Internal SourceFileLoader (sourcemap support) uses dirname, exists, readFile, and resolve
@@ -120,7 +103,13 @@ function setupLocalizeExtractor(
       // Output files are stored as relative to the workspace root
       const requestedPath = nodePath.relative(context.workspaceRoot, path);
 
-      const content = files.get(requestedPath);
+      const file = files[requestedPath];
+      let content;
+      if (file?.origin === 'memory') {
+        content = textDecoder.decode(file.contents);
+      } else if (file?.origin === 'disk') {
+        content = readFileSync(file.inputPath, 'utf-8');
+      }
       if (content === undefined) {
         throw new Error('Unknown file requested: ' + requestedPath);
       }
@@ -137,7 +126,7 @@ function setupLocalizeExtractor(
       // Output files are stored as relative to the workspace root
       const requestedPath = nodePath.relative(context.workspaceRoot, path);
 
-      return files.has(requestedPath);
+      return files[requestedPath] !== undefined;
     },
     dirname(path: string): string {
       return nodePath.dirname(path);
@@ -170,4 +159,10 @@ function setupLocalizeExtractor(
   });
 
   return extractor;
+}
+
+async function first<T>(iterable: AsyncIterable<T>): Promise<T | undefined> {
+  for await (const value of iterable) {
+    return value;
+  }
 }

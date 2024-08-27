@@ -42,7 +42,7 @@ import {
   getOutputHashFormat,
   getStatsOptions,
   globalScriptsByBundleName,
-  isPlatformServerInstalled,
+  isPackageInstalled,
 } from '../utils/helpers';
 
 const VENDORS_TEST = /[\\/]node_modules[\\/]/;
@@ -83,11 +83,11 @@ export async function getCommonConfig(wco: WebpackConfigOptions): Promise<Config
   // Load ESM `@angular/compiler-cli` using the TypeScript dynamic import workaround.
   // Once TypeScript provides support for keeping the dynamic import this workaround can be
   // changed to a direct dynamic import.
-  const {
-    GLOBAL_DEFS_FOR_TERSER,
-    GLOBAL_DEFS_FOR_TERSER_WITH_AOT,
-    VERSION: NG_VERSION,
-  } = await loadEsmModule<typeof import('@angular/compiler-cli')>('@angular/compiler-cli');
+  const { VERSION: NG_VERSION } =
+    await loadEsmModule<typeof import('@angular/compiler-cli')>('@angular/compiler-cli');
+  const { GLOBAL_DEFS_FOR_TERSER, GLOBAL_DEFS_FOR_TERSER_WITH_AOT } = await loadEsmModule<
+    typeof import('@angular/compiler-cli/private/tooling')
+  >('@angular/compiler-cli/private/tooling');
 
   // determine hashing format
   const hashFormat = getOutputHashFormat(buildOptions.outputHashing);
@@ -118,7 +118,10 @@ export async function getCommonConfig(wco: WebpackConfigOptions): Promise<Config
     // Fixes Critical dependency: the request of a dependency is an expression
     extraPlugins.push(new ContextReplacementPlugin(/@?hapi|express[\\/]/));
 
-    if (isPlatformServerInstalled(wco.root) && Array.isArray(entryPoints['main'])) {
+    if (
+      isPackageInstalled(wco.root, '@angular/platform-server') &&
+      Array.isArray(entryPoints['main'])
+    ) {
       // This import must come before any imports (direct or transitive) that rely on DOM built-ins being
       // available, such as `@angular/elements`.
       entryPoints['main'].unshift('@angular/platform-server/init');

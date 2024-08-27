@@ -74,6 +74,7 @@ interface FileEmitHistoryItem {
 export class AngularWebpackPlugin {
   private readonly pluginOptions: AngularWebpackPluginOptions;
   private compilerCliModule?: typeof import('@angular/compiler-cli');
+  private compilerCliToolingModule?: typeof import('@angular/compiler-cli/private/tooling');
   private watchMode?: boolean;
   private ngtscNextProgram?: NgtscProgram;
   private builder?: ts.EmitAndSemanticDiagnosticsBuilderProgram;
@@ -105,6 +106,18 @@ export class AngularWebpackPlugin {
     assert.ok(this.compilerCliModule, `'@angular/compiler-cli' used prior to Webpack compilation.`);
 
     return this.compilerCliModule;
+  }
+
+  private get compilerCliTooling(): typeof import('@angular/compiler-cli/private/tooling') {
+    // The compilerCliToolingModule field is guaranteed to be defined during a compilation
+    // due to the `beforeCompile` hook. Usage of this property accessor prior to the
+    // hook execution is an implementation error.
+    assert.ok(
+      this.compilerCliToolingModule,
+      `'@angular/compiler-cli' used prior to Webpack compilation.`,
+    );
+
+    return this.compilerCliToolingModule;
   }
 
   get options(): AngularWebpackPluginOptions {
@@ -311,7 +324,11 @@ export class AngularWebpackPlugin {
       compilationFileEmitters.set(compilation, fileEmitters);
       compilation.compiler.webpack.NormalModule.getCompilationHooks(compilation).loader.tap(
         PLUGIN_NAME,
-        (loaderContext: { [AngularPluginSymbol]?: FileEmitterCollection }) => {
+        (context) => {
+          const loaderContext = context as typeof context & {
+            [AngularPluginSymbol]?: FileEmitterCollection;
+          };
+
           loaderContext[AngularPluginSymbol] = fileEmitters;
         },
       );
@@ -688,10 +705,6 @@ export class AngularWebpackPlugin {
   }
 
   private async initializeCompilerCli(): Promise<void> {
-    if (this.compilerCliModule) {
-      return;
-    }
-
     // This uses a dynamic import to load `@angular/compiler-cli` which may be ESM.
     // CommonJS code can load ESM code via a dynamic import. Unfortunately, TypeScript
     // will currently, unconditionally downlevel dynamic import into a require call.
@@ -699,7 +712,10 @@ export class AngularWebpackPlugin {
     // this, a Function constructor is used to prevent TypeScript from changing the dynamic import.
     // Once TypeScript provides support for keeping the dynamic import this workaround can
     // be dropped.
-    this.compilerCliModule = await new Function(`return import('@angular/compiler-cli');`)();
+    this.compilerCliModule ??= await new Function(`return import('@angular/compiler-cli');`)();
+    this.compilerCliToolingModule ??= await new Function(
+      `return import('@angular/compiler-cli/private/tooling');`,
+    )();
   }
 
   private async addFileEmitHistory(

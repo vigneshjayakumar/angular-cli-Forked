@@ -35,6 +35,18 @@ export async function execute(
     return { success: false };
   }
 
+  const { projectType } = (await context.getProjectMetadata(projectName)) as {
+    projectType?: string;
+  };
+  if (projectType !== 'application') {
+    context.logger.error(
+      `Tried to extract from ${projectName} with 'projectType' ${projectType}, which is not supported.` +
+        ` The 'extract-i18n' builder can only extract from applications.`,
+    );
+
+    return { success: false };
+  }
+
   // Check Angular version.
   assertCompatibleAngularVersion(context.workspaceRoot);
 
@@ -70,6 +82,10 @@ export async function execute(
       context,
       localizeToolsModule.MessageExtractor,
     );
+
+    if (!extractionResult.success) {
+      return { success: false };
+    }
   } else {
     // Purge old build disk cache.
     // Other build systems handle stale cache purging directly.
@@ -77,11 +93,11 @@ export async function execute(
 
     const { extractMessages } = await import('./webpack-extraction');
     extractionResult = await extractMessages(normalizedOptions, builderName, context, transforms);
-  }
 
-  // Return the builder result if it failed
-  if (!extractionResult.builderResult.success) {
-    return extractionResult.builderResult;
+    // Return the builder result if it failed
+    if (!extractionResult.builderResult.success) {
+      return extractionResult.builderResult;
+    }
   }
 
   // Perform duplicate message checks
